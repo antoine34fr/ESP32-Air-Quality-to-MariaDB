@@ -40,28 +40,43 @@
 #include <WiFiUdp.h>       // Use this for WiFi instead of Ethernet.h
 #include <MySQL_Connection.h>
 #include <MySQL_Cursor.h>
+#include "DHT.h"
+
+
+#define DHTTYPE DHT22
+uint8_t DHTPin = 4;
+DHT dht(DHTPin, DHTTYPE);  
 
 IPAddress server_addr(192,168,1,198);  // IP of the MySQL *server* here
-char user[] = "zotz34fr";              // MySQL user login username
-char password[] = "Bidon1chat.";        // MySQL user login password
+char user[] = "xxxxxx";              // MySQL user login username
+char password[] = "xxxxxxx";        // MySQL user login password
 
-// Sample query
-char INSERT_SQL[] = "INSERT INTO testdb.esp32 VALUES (NULL,'Hello, Arduino!',NOW())";
+
 
 // WiFi card example
-char ssid[] = "freebox-dalnet-etage";         // your SSID
-char pass[] = "internet_pn";     // your SSID Password
+char ssid[] = "xxxxxxx";         // your SSID
+char pass[] = "xxxxxxxx";     // your SSID Password
 
 WiFiClient client;                 // Use this for WiFi instead of EthernetClient
 MySQL_Connection conn(&client);
 MySQL_Cursor* cursor;
 
+   // Sample query
+char INSERT_DATA[] = "INSERT INTO Home_Data.airQuality VALUES (NULL,%s,%s,%s,NULL,NOW(),'1');";
+char query[128];
+char temp[10];
+char humid[10];
+char hindex[10];
+// create MySQL cursor object
+MySQL_Cursor *cur_mem = new MySQL_Cursor(&conn);
+
 void setup()
 {
-  Serial.begin(115200);
-  while (!Serial); // wait for serial port to connect. Needed for Leonardo only
+ Serial.begin(115200);
+ pinMode(DHTPin, INPUT);
+ dht.begin();  
 
-  // Begin WiFi section
+ // Begin WiFi section
   Serial.printf("\nConnecting to %s", ssid);
   WiFi.begin(ssid, pass);
   while (WiFi.status() != WL_CONNECTED) {
@@ -79,15 +94,34 @@ void setup()
     Serial.println("OK.");
   else
     Serial.println("FAILED.");
-  
-  // create MySQL cursor object
-  cursor = new MySQL_Cursor(&conn);
+                
 }
-
+ 
 void loop()
 {
-  if (conn.connected())
-    cursor->execute(INSERT_SQL);
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+  float f = dht.readTemperature(true);
+  float hif = dht.computeHeatIndex(f, h);
+  float hic = dht.computeHeatIndex(t, h, false);
+ 
+  Serial.print("Temperature: ");
+  Serial.println(t);
+  Serial.print("Humidity: ");
+  Serial.println(h);
+  Serial.print("Heat index: ");
+  Serial.println(hic);
 
-  delay(5000);
+if (conn.connected())
+
+dtostrf(t, 5, 2, temp);
+dtostrf(h, 5, 2, humid);
+dtostrf(hic, 5, 2, hindex);
+sprintf(query, INSERT_DATA, temp, humid, hindex); 
+cur_mem->execute(query);
+
+                                            //     Serial.println(query); //to see what's actually requested to the db
+            
+  delay(10000);
+ 
 }
